@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("BlockUsers", "CreepaTime", "1.0.0")]
+    [Info("BlockUsers", "CreepaTime", "1.0.1")]
     [Description("BlockUsers is a system and API managing blocked users lists")]
     internal class BlockUsers : CovalencePlugin
     {
@@ -23,8 +23,8 @@ namespace Oxide.Plugins
             [JsonProperty("Maximum number of blocked users (0 to disable)")]
             public int MaxBlockedUsers = 30;
 
-            [JsonProperty("Cooldown for block command in seconds (0 to disable)")]
-            public int BlockDelay = 0;
+            [JsonProperty("Cooldown for block command in seconds (00:00:00 to disable)")]
+            public TimeSpan BlockDelay = TimeSpan.FromSeconds(0);
 
             [JsonProperty("Use permission system")]
             public bool UsePermissions = false;
@@ -402,38 +402,20 @@ namespace Oxide.Plugins
                 Message(player, "NotAllowed", command);
                 return;
             }
-//            if(config.BlockDelay > 0) {
-//                var timestamp = DateTime.UtcNow;
-//                var time = new TimeSpan();
-//
-//                PlayerData playerData = GetPlayerData(player.Id);
-//                try {
-//                    time = timestamp - playerData.LastCalled[player.Id];
-//                } catch {
-//                    playerData.LastCalled[player.Id] = timestamp;
-//                }
-//                if (time.Seconds < config.BlockDelay) {
-//                    Message(player, "Delay", $"{time.Seconds}.{time.Milliseconds}", command);
-//                    return;
-//                }
-//                playerData.LastCalled[player.Id] = timestamp;
-//            }
-
 
             if (args.Length <= 0 || args.Length == 1 && !args[0].Equals("list", StringComparison.OrdinalIgnoreCase))
             {
                 Message(player, "UsageBlockedUsers", command);
                 return;
             }
-
-            if(config.BlockDelay > 0) {
+            if(config.BlockDelay > TimeSpan.Zero) {
                 var timestamp = DateTime.UtcNow;
                 TimeSpan time;
                 DateTime span;
                 PlayerData playerData = GetPlayerData(player.Id);
                 if (playerData.LastCalled.TryGetValue(player.Id, out span)){
-                    time = timestamp - span;
-                    if (config.BlockDelay > time.Seconds) {
+                    time = config.BlockDelay - (timestamp - span);
+                    if (time >= TimeSpan.Zero) {
                         Message(player, "Delay", $"{time.Seconds}.{time.Milliseconds}", command);
                         return;
                     }
