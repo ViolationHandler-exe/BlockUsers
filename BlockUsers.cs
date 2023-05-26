@@ -7,8 +7,8 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("BlockUsers", "CreepaTime", "1.0.1")]
-    [Description("BlockUsers is a system and API managing blocked users lists")]
+    [Info("BlockUsers", "ViolationHandler", "1.0.5")]
+    [Description("A system and API for managing blocked users lists")]
     internal class BlockUsers : CovalencePlugin
     {
         #region Configuration
@@ -23,8 +23,9 @@ namespace Oxide.Plugins
             [JsonProperty("Maximum number of blocked users (0 to disable)")]
             public int MaxBlockedUsers = 30;
 
+            // If you are editting this from the code, make sure to use '.FromMinutes()' for 1-59 minutes, and '.FromHours()' for 1+ hours.
             [JsonProperty("Cooldown for block command in seconds (00:00:00 to disable)")]
-            public TimeSpan BlockDelay = TimeSpan.FromSeconds(0);
+            public TimeSpan BlockDelay = TimeSpan.FromSeconds(2);
 
             [JsonProperty("Use permission system")]
             public bool UsePermissions = false;
@@ -167,23 +168,23 @@ namespace Oxide.Plugins
 
         private bool AddBlockedUser(string playerId, string blockedId)
         {
-            if (!string.IsNullOrEmpty(playerId) && !string.IsNullOrEmpty(blockedId))
-
+            if (string.IsNullOrEmpty(playerId) && string.IsNullOrEmpty(blockedId))
             {
-                PlayerData playerData = GetPlayerData(playerId);
-                if (playerData.BlockedUsers.Count >= config.MaxBlockedUsers || !playerData.BlockedUsers.Add(blockedId))
-                {
-                    return false;
-                }
-
-                AddBlockedUserReverse(playerId, blockedId);
-                SaveData();
-
-                Interface.Oxide.CallHook("OnBlockedUserAdded", playerId, blockedId);
-                return true;
+                return false;
             }
 
-            return false;
+
+            PlayerData playerData = GetPlayerData(playerId);
+            if (playerData.BlockedUsers.Count >= config.MaxBlockedUsers || !playerData.BlockedUsers.Add(blockedId))
+            {
+                return false;
+            }
+
+            AddBlockedUserReverse(playerId, blockedId);
+            SaveData();
+
+            Interface.Oxide.CallHook("OnBlockedUserAdded", playerId, blockedId);
+            return true;
         }
 
         private bool AddBlockedUser(ulong playerId, ulong blockedId)
@@ -206,32 +207,31 @@ namespace Oxide.Plugins
 
         private bool RemoveBlockedUser(string playerId, string blockedId)
         {
-            if (!string.IsNullOrEmpty(playerId) && !string.IsNullOrEmpty(blockedId))
+            if (string.IsNullOrEmpty(playerId) && string.IsNullOrEmpty(blockedId))
             {
-                PlayerData playerData = GetPlayerData(playerId);
-                if (!playerData.BlockedUsers.Remove(blockedId))
-                {
-                    return false;
-                }
-
-                HashSet<string> blockedUsers;
-                if (reverseData.TryGetValue(blockedId, out blockedUsers))
-                {
-                    blockedUsers.Remove(playerId);
-                }
-
-                if (config.CacheTime > 0)
-                {
-                    playerData.Cached[blockedId] = (int)DateTime.UtcNow.Subtract(Epoch).TotalSeconds + config.CacheTime;
-                }
-
-                SaveData();
-
-                Interface.Oxide.CallHook("OnBlockedUserRemoved", playerId, blockedId);
-                return true;
+                return false;
+            }
+            PlayerData playerData = GetPlayerData(playerId);
+            if (!playerData.BlockedUsers.Remove(blockedId))
+            {
+                return false;
             }
 
-            return false;
+            HashSet<string> blockedUsers;
+            if (reverseData.TryGetValue(blockedId, out blockedUsers))
+            {
+                blockedUsers.Remove(playerId);
+            }
+
+            if (config.CacheTime > 0)
+            {
+                playerData.Cached[blockedId] = (int)DateTime.UtcNow.Subtract(Epoch).TotalSeconds + config.CacheTime;
+            }
+
+            SaveData();
+
+            Interface.Oxide.CallHook("OnBlockedUserRemoved", playerId, blockedId);
+            return true;
         }
 
         private bool RemoveBlockedUser(ulong playerId, ulong blockedId)
@@ -291,14 +291,15 @@ namespace Oxide.Plugins
 
         private bool WereBlockedUsers(string playerId, string blockedUserId)
         {
-            if (!string.IsNullOrEmpty(playerId) && !string.IsNullOrEmpty(blockedUserId))
+            if (string.IsNullOrEmpty(playerId) && string.IsNullOrEmpty(blockedUserId))
             {
-                PlayerData playerData = GetPlayerData(playerId);
-                PlayerData BlockedUserData = GetPlayerData(blockedUserId);
-                return (playerData.BlockedUsers.Contains(blockedUserId) || playerData.IsCached(blockedUserId)) && (BlockedUserData.BlockedUsers.Contains(playerId) || BlockedUserData.IsCached(playerId));
+                return false;
             }
 
-            return false;
+            PlayerData playerData = GetPlayerData(playerId);
+            PlayerData BlockedUserData = GetPlayerData(blockedUserId);
+            return (playerData.BlockedUsers.Contains(blockedUserId) || playerData.IsCached(blockedUserId)) && (BlockedUserData.BlockedUsers.Contains(playerId) || BlockedUserData.IsCached(playerId));
+
         }
 
         private bool WereBlockedUsers(ulong playerId, ulong blockedUserId)
@@ -323,13 +324,12 @@ namespace Oxide.Plugins
 
         private bool WasBlockedUser(string playerId, string blockedUserId)
         {
-            if (!string.IsNullOrEmpty(playerId) && !string.IsNullOrEmpty(blockedUserId))
+            if (string.IsNullOrEmpty(playerId) && string.IsNullOrEmpty(blockedUserId))
             {
-                PlayerData playerData = GetPlayerData(blockedUserId);
-                return playerData.BlockedUsers.Contains(playerId) || playerData.IsCached(playerId);
+                return false;
             }
-
-            return false;
+            PlayerData playerData = GetPlayerData(blockedUserId);
+            return playerData.BlockedUsers.Contains(playerId) || playerData.IsCached(playerId);
         }
 
         private bool WasBlockedUser(ulong playerId, ulong blockedUserId)
@@ -416,7 +416,7 @@ namespace Oxide.Plugins
                 if (playerData.LastCalled.TryGetValue(player.Id, out span)){
                     time = config.BlockDelay - (timestamp - span);
                     if (time >= TimeSpan.Zero) {
-                        Message(player, "Delay", $"{time.Seconds}.{time.Milliseconds}", command);
+                        Message(player, "Delay", $"{time.Seconds+time.Milliseconds/1000.0}", command);
                         return;
                     }
                 }
@@ -425,63 +425,63 @@ namespace Oxide.Plugins
 
             switch (args[0].ToLower())
             {
-                    case "list":
-                        string[] blockedList = GetBlockedUsersList(player.Id);
-                        if (blockedList.Length > 0)
-                        {
-                            Message(player, "BlockedList", $"{blockedList.Length}/{config.MaxBlockedUsers}", string.Join(", ", blockedList));
-                        }
-                        else
-                        {
-                            Message(player, "NoBlockedUsers");
-                        }
+                case "list":
+                    string[] blockedList = GetBlockedUsersList(player.Id);
+                    if (blockedList.Length > 0)
+                    {
+                        Message(player, "BlockedList", $"{blockedList.Length}/{config.MaxBlockedUsers}", string.Join(", ", blockedList));
+                    }
+                    else
+                    {
+                        Message(player, "NoBlockedUsers");
+                    }
 
+                    return;
+                case "+":
+                case "add":
+                    IPlayer target = FindPlayer(args[1], player);
+                    if (target == null)
+                    {
                         return;
+                    }
 
-                    case "+":
-                    case "add":
-                        IPlayer target = FindPlayer(args[1], player);
-                        if (target == null)
-                        {
-                            return;
-                        }
-
-                        if (player.Id == target.Id)
-                        {
-                            Message(player, "CannotBlockSelf");
-                            return;
-                        }
-
-                        PlayerData playerData = GetPlayerData(player.Id);
-                        if (playerData.BlockedUsers.Count >= config.MaxBlockedUsers)
-                        {
-                            Message(player, "BlockedListFull");
-                            return;
-                        }
-
-                        if (playerData.BlockedUsers.Contains(target.Id))
-                        {
-                            Message(player, "AlreadyOnBlockedList", target.Name);
-                            return;
-                        }
-
-                        AddBlockedUser(player.Id, target.Id);
-                        Message(player, "BlockedUserAdded", target.Name);
+                    if (player.Id == target.Id)
+                    {
+                        Message(player, "CannotBlockSelf");
                         return;
+                    }
 
-                    case "-":
-                    case "remove":
-                        string blockedUser = FindBlockedUser(args[1]);
-                        if (string.IsNullOrEmpty(blockedUser))
-                        {
-                            Message(player, "NotOnBlockedList", args[1]);
-                            return;
-                        }
-
-                        bool removed = RemoveBlockedUser(player.Id, blockedUser.ToString());
-                        Message(player, removed ? "BlockedUserRemoved" : "NotOnBlockedList", args[1]);
+                    PlayerData playerData = GetPlayerData(player.Id);
+                    if (playerData.BlockedUsers.Count >= config.MaxBlockedUsers)
+                    {
+                        Message(player, "BlockedListFull");
                         return;
-                }
+                    }
+
+                    if (playerData.BlockedUsers.Contains(target.Id))
+                    {
+                        Message(player, "AlreadyOnBlockedList", target.Name);
+                        return;
+                    }
+
+                    AddBlockedUser(player.Id, target.Id);
+                    Message(player, "BlockedUserAdded", target.Name);
+                    return;
+                case "-":
+                case "remove":
+                    string blockedUser = FindBlockedUser(args[1]);
+                    if (string.IsNullOrEmpty(blockedUser))
+                    {
+                        Message(player, "NotOnBlockedList", args[1]);
+                        return;
+                    }
+
+                    bool removed = RemoveBlockedUser(player.Id, blockedUser.ToString());
+                    Message(player, removed ? "BlockedUserRemoved" : "NotOnBlockedList", args[1]);
+                    return;
+            }
+            Message(player, "UsageBlockedUsers", command);
+            return;
         }
 
         private void SendHelpText(object obj)
@@ -509,7 +509,6 @@ namespace Oxide.Plugins
                     }
                 }
             }
-
             return string.Empty;
         }
 
